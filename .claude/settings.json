@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // \"\"' | { read -r f; echo \"$f\" | grep -qE '\\.(ts|tsx|json)$' && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"A source file was just edited. If this change is significant (new feature, removed feature, changed behavior, updated folder structure, changed dependencies), update CLAUDE.md to reflect it.\"}}' || true; } 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}
