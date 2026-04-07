@@ -1,11 +1,12 @@
 import { mkdir, copyFile } from 'fs/promises'
 import { join, basename, extname } from 'path'
-import { existsSync } from 'fs'
 import { extractGps, extractDate } from './exif'
 import { reverseGeocode, sanitizeFolderName } from './geocoder'
 import { classifyPhoto } from './vision'
 import { organizeDocument } from './document-organizer'
+import { resolveCollision } from './collision'
 import type { Settings } from './store'
+import type { BrowserWindow } from 'electron'
 
 export interface OrganizeResult {
   originalPath: string
@@ -13,6 +14,9 @@ export interface OrganizeResult {
   location: string
   category: string
   error?: string
+  confidence?: number
+  classificationMethod?: string
+  classificationReasoning?: string
 }
 
 const PHOTO_EXTS = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.tif', '.tiff', '.webp'])
@@ -20,14 +24,15 @@ const DOC_EXTS = new Set(['.pdf'])
 
 export async function organizeFile(
   filePath: string,
-  settings: Settings
+  settings: Settings,
+  parentWindow?: BrowserWindow | null
 ): Promise<OrganizeResult> {
   const ext = extname(filePath).toLowerCase()
   if (DOC_EXTS.has(ext)) {
-    return organizeDocument(filePath, settings)
+    return organizeDocument(filePath, settings, parentWindow)
   }
   if (PHOTO_EXTS.has(ext)) {
-    return organizePhoto(filePath, settings)
+    return organizePhoto(filePath, settings, parentWindow)
   }
   return {
     originalPath: filePath,
@@ -40,7 +45,8 @@ export async function organizeFile(
 
 export async function organizePhoto(
   filePath: string,
-  settings: Settings
+  settings: Settings,
+  parentWindow?: BrowserWindow | null
 ): Promise<OrganizeResult> {
   try {
     // 1. Extract GPS from EXIF
@@ -82,15 +88,17 @@ export async function organizePhoto(
     await mkdir(destDir, { recursive: true })
 
     // 5. Handle filename collisions
-    const ext = extname(filePath)
-    const base = basename(filePath, ext)
-    let destPath = join(destDir, basename(filePath))
-
-    let counter = 1
-    while (existsSync(destPath)) {
-      destPath = join(destDir, `${base}_${counter}${ext}`)
-      counter++
+    const collision = await resolveCollision(destDir, basename(filePath), parentWindow)
+    if (collision.choice === 'skip') {
+      return {
+        originalPath: filePath,
+        destinationPath: '',
+        location: locationDisplay,
+        category,
+        error: 'Skipped — file already exists'
+      }
     }
+    const destPath = collision.path
 
     // 6. Copy file, preserving the original
     await copyFile(filePath, destPath)

@@ -4,6 +4,8 @@ interface SettingsData {
   outputDir: string
   anthropicApiKey: string
   excludedTerms: string
+  googleCloudApiKey?: string
+  textExtractorBackend?: string
 }
 
 function FolderIcon() {
@@ -98,6 +100,28 @@ export default function Settings() {
             Powers intelligent document classification via Claude Haiku.
             Documents are sorted by type (Invoice, Contract, Statement, etc.) and source.
             Without a key, basic keyword matching is used instead.
+          </p>
+        </div>
+      </div>
+
+      {/* Google Cloud Document AI section */}
+      <div className="settings-section">
+        <p className="settings-section-title">Google Cloud Document AI</p>
+
+        <div className="field">
+          <label>
+            Google Cloud API Key
+            <span className={`api-key-dot ${form.googleCloudApiKey ? 'filled' : ''}`} />
+          </label>
+          <input
+            value={form.googleCloudApiKey || ''}
+            onChange={set('googleCloudApiKey')}
+            placeholder="Coming soon..."
+            disabled
+          />
+          <p className="hint">
+            Google Cloud Document AI provides advanced OCR and text extraction
+            for scanned PDFs. This feature is coming soon.
           </p>
         </div>
       </div>

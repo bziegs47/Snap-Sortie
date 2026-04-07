@@ -9,7 +9,24 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "start": "electron-vite dev",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dist": "electron-vite build && electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.snapsortie",
+    "productName": "Snap Sortie",
+    "mac": {
+      "icon": "resources/icon.icns",
+      "category": "public.app-category.utilities",
+      "target": "dmg"
+    },
+    "files": [
+      "out/**/*",
+      "resources/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    }
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
@@ -32,6 +49,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.2.1",
     "electron": "^30.0.6",
+    "electron-builder": "^26.8.1",
     "electron-vite": "^2.1.0",
     "typescript": "^5.4.5",
     "vite": "^5.2.11"

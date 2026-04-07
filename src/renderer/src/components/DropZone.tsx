@@ -58,10 +58,10 @@ export default function DropZone({ sessionResults, onResults, onUpdateResult, on
 
   const reviewCount = countNeedingReview(sessionResults, acceptedIndices)
 
-  const stageFiles = useCallback((paths: string[]) => {
-    const valid = paths.filter(p => /\.(jpe?g|png|heic|heif|tiff?|webp|pdf)$/i.test(p))
-    if (!valid.length) return
-    setStagedFiles(valid)
+  const stageFiles = useCallback(async (paths: string[]) => {
+    const resolved = await window.api.resolveDropPaths(paths)
+    if (!resolved.length) return
+    setStagedFiles(resolved)
     setPerSortExclusions('')
   }, [])
 
@@ -94,11 +94,11 @@ export default function DropZone({ sessionResults, onResults, onUpdateResult, on
     return window.api.onOpenFiles(stageFiles)
   }, [stageFiles])
 
-  const onDrop = useCallback((e: React.DragEvent) => {
+  const onDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault()
     setOver(false)
     const paths = Array.from(e.dataTransfer.files).map(f => f.path)
-    stageFiles(paths)
+    await stageFiles(paths)
   }, [stageFiles])
 
   const browse = useCallback(async () => {
@@ -191,7 +191,7 @@ export default function DropZone({ sessionResults, onResults, onUpdateResult, on
               <div className="drop-zone-svg-wrap">
                 <UploadIcon />
               </div>
-              <h2>Drop files to organize</h2>
+              <h2>Drop files or folders to organize</h2>
               <p className="drop-zone-formats">Photos — JPEG · PNG · HEIC · TIFF · WebP</p>
               <p className="drop-zone-formats" style={{ marginBottom: 16 }}>Documents — PDF</p>
               <span className="drop-zone-browse" onClick={browse}>or browse files</span>

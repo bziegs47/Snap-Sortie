@@ -4,6 +4,8 @@ export interface Settings {
   outputDir: string
   anthropicApiKey: string
   excludedTerms: string
+  googleCloudApiKey?: string
+  textExtractorBackend?: 'pdf-parse' | 'google-docai' | 'none'
 }
 
 const store = new Store<Settings>({

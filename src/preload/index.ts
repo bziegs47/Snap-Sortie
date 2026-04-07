@@ -11,6 +11,7 @@ const api = {
   openPreviewWindow: (filePath: string) => ipcRenderer.invoke('open-preview-window', filePath),
   moveFile: (currentPath: string, newRelativePath: string) => ipcRenderer.invoke('move-file', currentPath, newRelativePath),
   getOutputDir: () => ipcRenderer.invoke('get-output-dir'),
+  resolveDropPaths: (paths: string[]) => ipcRenderer.invoke('resolve-drop-paths', paths),
   onOpenFiles: (cb: (paths: string[]) => void) => {
     ipcRenderer.on('open-files', (_e, paths) => cb(paths))
     return () => ipcRenderer.removeAllListeners('open-files')

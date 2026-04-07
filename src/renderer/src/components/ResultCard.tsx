@@ -8,6 +8,9 @@ export interface OrganizeResult {
   location: string
   category: string
   error?: string
+  confidence?: number
+  classificationMethod?: string
+  classificationReasoning?: string
 }
 
 function MapPinIcon() {
@@ -96,7 +99,9 @@ export function isUnknown(r: OrganizeResult): boolean {
   if (r.error) return false
   const loc = r.location.toLowerCase()
   const cat = r.category.toLowerCase()
-  return loc.includes('unknown') || loc.includes('other') || cat.includes('unknown') || cat.includes('other')
+  if (loc.includes('unknown') || loc.includes('other') || cat.includes('unknown') || cat.includes('other')) return true
+  if (r.confidence !== undefined && r.confidence < 0.7) return true
+  return false
 }
 
 interface Props {
@@ -194,6 +199,21 @@ export default function ResultCard({
               <TagIcon />
               {result.category}
             </span>
+            {result.confidence !== undefined && (
+              <span
+                className="badge badge-confidence"
+                title={result.classificationReasoning || `Confidence: ${Math.round(result.confidence * 100)}%`}
+              >
+                <span
+                  className="confidence-dot"
+                  style={{ background: result.confidence >= 0.8 ? '#4caf50' : result.confidence >= 0.5 ? '#ff9800' : '#f44336' }}
+                />
+                {Math.round(result.confidence * 100)}%
+                {result.classificationMethod && (
+                  <span className="confidence-method"> via {result.classificationMethod === 'text-extract' ? 'text' : result.classificationMethod}</span>
+                )}
+              </span>
+            )}
             {needsReview && !editing && (
               <>
                 <button className="btn-inline-review" title="Edit sort path" onClick={startEdit}>

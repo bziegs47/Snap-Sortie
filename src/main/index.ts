@@ -4,6 +4,7 @@ import { rename, mkdir, readdir, rmdir } from 'fs/promises'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { organizeFile } from './services/organizer'
 import { getSettings, saveSettings } from './services/store'
+import { resolveCollision } from './services/collision'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -16,6 +17,7 @@ function createWindow(): void {
     show: false,
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0f1a10',
+    icon: join(__dirname, '../../resources/icon.icns'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -162,7 +164,7 @@ ipcMain.handle('organize-photos', async (_e, filePaths: string[], perSortExclusi
   }
   const results = []
   for (const filePath of filePaths) {
-    const result = await organizeFile(filePath, mergedSettings)
+    const result = await organizeFile(filePath, mergedSettings, mainWindow)
     results.push(result)
   }
   return results
@@ -191,6 +193,7 @@ ipcMain.handle('pick-files', async () => {
 ipcMain.handle('open-preview-window', async (_e, filePath: string) => {
   const { existsSync, readFileSync } = require('fs')
   const { extname: pathExtname } = require('path')
+  console.log('[preview] Requested path:', filePath, '| exists:', existsSync(filePath))
   if (!existsSync(filePath)) {
     throw new Error('File has been moved or deleted.')
   }
@@ -214,51 +217,47 @@ ipcMain.handle('open-preview-window', async (_e, filePath: string) => {
 
   previewWin.setMenuBarVisibility(false)
 
-  // Close when the window loses focus (click outside)
-  previewWin.on('blur', () => {
-    if (!previewWin.isDestroyed()) previewWin.close()
-  })
 
   if (isPdf) {
     // Chromium's built-in PDF viewer handles PDFs natively
     previewWin.loadFile(filePath)
   } else {
-    // For images, load an HTML wrapper with the image embedded as base64
+    // For images, write a temp HTML file that references the image as base64
     const { execFileSync } = require('child_process')
     const { tmpdir } = require('os')
     const { randomUUID } = require('crypto')
-    const { unlinkSync } = require('fs')
+    const { unlinkSync, writeFileSync } = require('fs')
 
     let imageFile = filePath
-    let tempFile: string | null = null
+    let sipsTemp: string | null = null
 
     // Convert non-Chromium-native formats to JPEG via sips
     const chromiumNative = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif'])
     if (!chromiumNative.has(ext)) {
-      tempFile = join(tmpdir(), `snapsortie-preview-${randomUUID()}.jpg`)
+      sipsTemp = join(tmpdir(), `snapsortie-preview-${randomUUID()}.jpg`)
       try {
-        execFileSync('sips', ['-s', 'format', 'jpeg', filePath, '--out', tempFile])
-        imageFile = tempFile
+        execFileSync('sips', ['-s', 'format', 'jpeg', filePath, '--out', sipsTemp])
+        imageFile = sipsTemp
       } catch {
-        // If conversion fails, try loading raw anyway
-        tempFile = null
+        sipsTemp = null
       }
     }
 
-    const mime = 'image/jpeg'  // JPEG works universally; PNG/WebP also decode fine as jpeg src
     const mimeMap: Record<string, string> = {
       '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
       '.png': 'image/png', '.webp': 'image/webp',
       '.tif': 'image/tiff', '.tiff': 'image/tiff'
     }
-    const actualMime = tempFile ? 'image/jpeg' : (mimeMap[ext] || 'image/jpeg')
+    const actualMime = sipsTemp ? 'image/jpeg' : (mimeMap[ext] || 'image/jpeg')
     const b64 = readFileSync(imageFile).toString('base64')
 
-    // Clean up temp file
-    if (tempFile) {
-      try { unlinkSync(tempFile) } catch {}
+    // Clean up sips temp
+    if (sipsTemp) {
+      try { unlinkSync(sipsTemp) } catch {}
     }
 
+    // Write a temp HTML file — avoids data URL size limits
+    const htmlTemp = join(tmpdir(), `snapsortie-preview-${randomUUID()}.html`)
     const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>${filename}</title>
 <style>
@@ -267,7 +266,13 @@ ipcMain.handle('open-preview-window', async (_e, filePath: string) => {
   img { max-width: 100%; max-height: 100vh; object-fit: contain; }
 </style></head>
 <body><img src="data:${actualMime};base64,${b64}" alt="${filename}"></body></html>`
-    previewWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+    writeFileSync(htmlTemp, html)
+    previewWin.loadFile(htmlTemp)
+
+    // Clean up temp HTML when window closes
+    previewWin.on('closed', () => {
+      try { unlinkSync(htmlTemp) } catch {}
+    })
   }
 })
 
@@ -279,13 +284,51 @@ ipcMain.handle('move-file', async (_e, currentPath: string, newRelativePath: str
   const oldDir = dirname(currentPath)
   const newDir = join(settings.outputDir, newRelativePath)
   await mkdir(newDir, { recursive: true })
-  const newPath = join(newDir, filename)
-  await rename(currentPath, newPath)
+
+  // Check for collision
+  const collision = await resolveCollision(newDir, filename, mainWindow)
+  if (collision.choice === 'skip') {
+    throw new Error('Move cancelled — file already exists.')
+  }
+
+  await rename(currentPath, collision.path)
 
   // Walk up from old directory, removing empty folders up to outputDir
   await pruneEmptyDirs(oldDir, settings.outputDir)
 
-  return newPath
+  return collision.path
+})
+
+// Resolve dropped paths — expand folders into supported files recursively
+ipcMain.handle('resolve-drop-paths', async (_e, paths: string[]) => {
+  const { statSync, readdirSync } = require('fs')
+  const supportedExts = new Set(['.jpg', '.jpeg', '.png', '.heic', '.heif', '.tif', '.tiff', '.webp', '.pdf'])
+  const files: string[] = []
+
+  function walk(dir: string): void {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name.startsWith('.')) continue // skip hidden files
+      const fullPath = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(fullPath)
+      } else if (supportedExts.has(require('path').extname(entry.name).toLowerCase())) {
+        files.push(fullPath)
+      }
+    }
+  }
+
+  for (const p of paths) {
+    try {
+      const s = statSync(p)
+      if (s.isDirectory()) {
+        walk(p)
+      } else if (supportedExts.has(require('path').extname(p).toLowerCase())) {
+        files.push(p)
+      }
+    } catch { /* skip inaccessible paths */ }
+  }
+
+  return files
 })
 
 // Get the output directory so the renderer can compute relative paths

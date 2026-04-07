@@ -22,7 +22,9 @@ function needsReview(r: OrganizeResult): boolean {
   if (r.error) return false
   const loc = r.location.toLowerCase()
   const cat = r.category.toLowerCase()
-  return loc.includes('unknown') || loc.includes('other') || cat.includes('unknown') || cat.includes('other')
+  if (loc.includes('unknown') || loc.includes('other') || cat.includes('unknown') || cat.includes('other')) return true
+  if (r.confidence !== undefined && r.confidence < 0.7) return true
+  return false
 }
 
 export function countNeedingReview(results: OrganizeResult[], accepted: Set<number> = new Set()): number {
@@ -184,8 +186,16 @@ export default function ReviewPanel({ results, acceptedIndices, onMoved, onAccep
                   </svg>
                 </button>
                 <span className="badge badge-location">{item.result.location}</span>
+                {item.result.confidence !== undefined && (
+                  <span className="badge badge-confidence" style={{ marginLeft: 4 }}>
+                    {Math.round(item.result.confidence * 100)}%
+                  </span>
+                )}
               </div>
             </div>
+            {item.result.classificationReasoning && (
+              <div className="review-item-reasoning">{item.result.classificationReasoning}</div>
+            )}
             <div className="review-item-path">
               <span className="review-path-label">Move to:</span>
               <input

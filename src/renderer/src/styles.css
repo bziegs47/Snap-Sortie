@@ -704,6 +704,16 @@ body {
   background: rgba(200,136,12,.06);
 }
 
+.review-item-reasoning {
+  font-size: 9px;
+  color: var(--text3);
+  padding-left: 22px;
+  margin-bottom: 4px;
+  font-style: italic;
+  letter-spacing: .02em;
+  line-height: 1.5;
+}
+
 .review-item-path {
   display: flex;
   align-items: center;
@@ -858,6 +868,24 @@ body {
 .badge-location { background: rgba(200,136,12,.1); color: var(--amber);  border-color: rgba(200,136,12,.25); }
 .badge-category { background: rgba(255,255,255,.04); color: var(--text2); border-color: var(--border); }
 .badge-error    { background: rgba(184,64,64,.1);   color: var(--red);   border-color: rgba(184,64,64,.25); }
+.badge-confidence {
+  background: rgba(255,255,255,.03);
+  color: var(--text3);
+  border-color: var(--border);
+  gap: 5px;
+  font-size: 8px;
+  letter-spacing: .06em;
+}
+.confidence-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.confidence-method {
+  opacity: 0.7;
+  font-weight: 400;
+}
 
 /* Unknown file indicator */
 .result-card.needs-review {

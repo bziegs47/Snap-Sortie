@@ -11,6 +11,7 @@ interface Window {
     revealInFinder: (path: string) => Promise<boolean>
     moveFile: (currentPath: string, newRelativePath: string) => Promise<string>
     getOutputDir: () => Promise<string>
+    resolveDropPaths: (paths: string[]) => Promise<string[]>
     onOpenFiles: (cb: (paths: string[]) => void) => () => void
   }
   electron: {
